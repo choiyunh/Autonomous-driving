@@ -209,6 +209,28 @@ def process_image(frame):
     return lpos, rpos
 
 
+def light_detection(frame):
+    frame = frame[150:250, 220:420]
+
+    frame2 = frame.copy()
+    frame2 = cv2.GaussianBlur(frame2, (9, 9), 0)
+    imgray = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
+
+    circles = cv2.HoughCircles(imgray, cv2.HOUGH_GRADIENT, 1, 10, param1=60, param2=30, minRadius=0, maxRadius=0)
+
+    if circles is not None:
+        circles = np.uint16(np.around(circles))
+        # print(circles)
+
+        for i in circles[0, :]:
+            cv2.circle(frame, (i[0], i[1]), i[2], (255, 0, 0), 2)
+
+        cv2.imshow('HoughCircle', frame)
+        return False
+    else:
+        return True
+
+
 def start():
     global pub
     global image
@@ -230,7 +252,9 @@ def start():
 
         center = (lpos + rpos) / 2
         angle = -(Width / 2 - center)
-        drive(angle, 6)
+
+        if light_detection(image):
+            drive(angle, 6)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
@@ -240,4 +264,3 @@ def start():
 
 if __name__ == '__main__':
     start()
-
