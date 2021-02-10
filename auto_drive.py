@@ -222,8 +222,11 @@ def light_detection(frame):
         circles = np.uint16(np.around(circles))
         # print(circles)
 
-        for i in circles[0, :]:
-            cv2.circle(frame, (i[0], i[1]), i[2], (255, 0, 0), 2)
+        for circle in circles[0, :]:
+            cv2.circle(frame, (circle[0], circle[1]), circle[2], (255, 0, 0), 2)
+            print(imgray[circle[1], circle[0]])
+            if imgray[circle[1], circle[0]] <= 100:  # light on
+                return False
 
         cv2.imshow('HoughCircle', frame)
         return False
@@ -251,7 +254,7 @@ def start():
         lpos, rpos = process_image(image)
 
         center = (lpos + rpos) / 2
-        angle = -(Width / 2 - center)
+        angle = -(Width / 2 - center) * 0.9
 
         if light_detection(image):
             drive(angle, 6)
