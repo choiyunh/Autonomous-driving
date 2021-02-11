@@ -222,8 +222,10 @@ def light_detection(frame):
         circles = np.uint16(np.around(circles))
         # print(circles)
 
+        # Draw all circles
         for circle in circles[0, :]:
             cv2.circle(frame, (circle[0], circle[1]), circle[2], (255, 0, 0), 2)
+
             print(imgray[circle[1], circle[0]])
             if imgray[circle[1], circle[0]] <= 100:  # light on
                 return False
