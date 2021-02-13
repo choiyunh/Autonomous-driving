@@ -210,28 +210,40 @@ def process_image(frame):
 
 
 def light_detection(frame):
-    frame = frame[150:250, 220:420]
-
+    global limit
+    frame = frame[150:250, 180:480]
+    cv2.imshow('frame', frame)
     frame2 = frame.copy()
     frame2 = cv2.GaussianBlur(frame2, (9, 9), 0)
     imgray = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
 
-    circles = cv2.HoughCircles(imgray, cv2.HOUGH_GRADIENT, 1, 10, param1=60, param2=30, minRadius=0, maxRadius=0)
+    circles = cv2.HoughCircles(imgray, cv2.HOUGH_GRADIENT, 1, 10, param1=60, param2=25, minRadius=5, maxRadius=20)
 
     if circles is not None:
         circles = np.uint16(np.around(circles))
-        # print(circles)
-
-        # Draw all circles
+        print(circles)
         for circle in circles[0, :]:
             cv2.circle(frame, (circle[0], circle[1]), circle[2], (255, 0, 0), 2)
 
-            print(imgray[circle[1], circle[0]])
-            if imgray[circle[1], circle[0]] <= 100:  # light on
+        if len(circles[0]) == 3:
+            lightX = [circles[0][0][0], circles[0][1][0], circles[0][2][0]]
+            lightX.sort()
+
+            if (lightX[0] + lightX[1] + lightX[2] + 2) // 3 == lightX[1]:
+                if imgray[circles[0][2][1], circle[0][2][0]] <= 160:  # light on
+                    return True
+                return False
+        elif len(circles[0]) == 4:
+            lightX = [circles[0][0][0], circles[0][1][0], circles[0][2][0]]
+            lightX.sort()
+
+            if (lightX[0] + lightX[1] + lightX[2] + 2) // 3 == lightX[1]:
+                if imgray[circles[0][0][1], circle[0][0][0]] <= 160:  # left light
+                    limit = 5
+                if imgray[circles[0][3][1], circle[0][3][0]] <= 160:  # right light
+                    limit = 6
                 return False
 
-        cv2.imshow('HoughCircle', frame)
-        return False
     else:
         return True
 
@@ -269,3 +281,4 @@ def start():
 
 if __name__ == '__main__':
     start()
+
