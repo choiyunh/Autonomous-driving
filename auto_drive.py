@@ -4,6 +4,7 @@ import cv2, random, math
 from cv_bridge import CvBridge
 from xycar_motor.msg import xycar_motor
 from sensor_msgs.msg import Image
+from detect_stopline import detect_stopline
 
 import sys
 import os
@@ -270,7 +271,8 @@ def start():
         center = (lpos + rpos) / 2
         angle = -(Width / 2 - center) * 0.9
 
-        if light_detection(image):
+        #if light_detection(image):
+        if not detect_stopline(image):
             drive(angle, 6)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
