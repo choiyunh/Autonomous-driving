@@ -1,9 +1,19 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+####################################################################
+# 프로그램명 : hough_drive_a2.py
+# 작 성 자 : 자이트론
+# 생 성 일 : 2020년 08월 12일
+# 본 프로그램은 상업 라이센스에 의해 제공되므로 무단 배포 및 상업적 이용을 금합니다.
+####################################################################
+
 import rospy, rospkg
 import numpy as np
-import cv2, random, math
+import cv2, random, math, time
 from cv_bridge import CvBridge
 from xycar_motor.msg import xycar_motor
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, LaserScan
 from detect_stopline import detect_stopline
 
 import sys
@@ -18,6 +28,7 @@ def signal_handler(sig, frame):
 
 signal.signal(signal.SIGINT, signal_handler)
 
+lidar_range = []
 image = np.empty(shape=[0])
 bridge = CvBridge()
 pub = None
@@ -25,6 +36,8 @@ Width = 640
 Height = 480
 Offset = 400
 Gap = 40
+flag = 0
+limit = 0
 
 
 def img_callback(data):
@@ -32,14 +45,28 @@ def img_callback(data):
     image = bridge.imgmsg_to_cv2(data, "bgr8")
 
 
+def lidar_callback(data):
+    global lidar_range
+    lidar_range = data.ranges
+
+
+def scan_front(degree_s, degree_e, dist):
+    global lidar_range
+
+    for degree in range(degree_s, degree_e):  # scan degree
+        if lidar_range[degree] <= dist:
+            print
+            lidar_range[degree]
+            return False
+    return True
+
+
 # publish xycar_motor msg
 def drive(Angle, Speed):
     global pub
-
     msg = xycar_motor()
     msg.angle = Angle
     msg.speed = Speed
-
     pub.publish(msg)
 
 
@@ -249,19 +276,61 @@ def light_detection(frame):
         return True
 
 
+def avoid_obstacles(degree_s, degree_e):
+    global limit, lidar_range, flag  # left = 0', right = 180'
+
+    for degree in range(degree_s, degree_e):
+        # Obstacles in front of vehicle -> go left
+        if flag == 0 and 44 < degree < 134 and lidar_range[degree] <= 0.75:
+            flag = 1
+            limit = 1
+            print('Go Left')
+            print(lidar_range[degree], degree)
+
+        if flag == 1 and 175 < degree < 189 and 0.45 < lidar_range[degree] < 0.8:
+            flag = 2
+            limit = 2
+            print('Go Right')
+            print(lidar_range[degree], degree)
+
+        if flag == 2 and 185 < degree < 189 and 0.1 < lidar_range[degree] < 0.3:
+            flag = 3
+            limit = 3
+            time_s = time.time()
+            print(start)
+            print('Go Straight')
+            print(lidar_range[degree], degree)
+
+        if flag == 3:
+            time_e = time.time()
+            if time_e - time_s >= 6:
+                limit = 4
+
+
 def start():
     global pub
     global image
     global cap
     global Width, Height
 
+    pid_P = 0.7
+    pid_I = 0
+    pid_D = 0
+    sum_angle = 0
+    mission = 0
+
+    prev_angle = 0
+
     rospy.init_node('auto_drive')
     pub = rospy.Publisher('xycar_motor', xycar_motor, queue_size=1)
-
     image_sub = rospy.Subscriber("/usb_cam/image_raw", Image, img_callback)
+    lidar_sub = rospy.Subscriber("/scan", LaserScan, lidar_callback, queue_size=1)
+
     print
     "---------- Xycar A2 v1.1.0 ----------"
     rospy.sleep(2)
+
+    mission_start = time.time()
     while True:
         while not image.size == (640 * 480 * 3):
             continue
@@ -269,11 +338,75 @@ def start():
         lpos, rpos = process_image(image)
 
         center = (lpos + rpos) / 2
-        angle = -(Width / 2 - center) * 0.9
+        angle = -(Width / 2 - center)
+        sum_angle += angle
+        diff_angle = angle - prev_angle
+        c = pid_P * angle + pid_I * sum_angle + pid_D * (diff_angle)
+        prev_angle = angle
+        # PID Control
+        # prev_angle = angle
+        # drive(angle, 12)
+        print('Mission', mission)
 
-        #if light_detection(image):
-        if not detect_stopline(image):
-            drive(angle, 6)
+        if mission == 0:
+            if scan_front(44, 134, 0.4) and light_detection(image):
+                drive(0, 3)
+            else:
+                drive(0, 0)
+                if time.time() - mission_start >= 10:
+                    mission = 1
+                    mission_start = time.time()
+        if mission == 1:
+            if not detect_stopline(image):
+                drive(0, 3)
+            else:
+                drive(0, 0)
+                if time.time() - mission_start >= 10:
+                    mission = 2
+                    mission_start = time.time()
+        if mission == 2:
+            if scan_front(0, 134, 0.6):
+                drive(0, 3)
+            else:
+                drive(0, 0)
+            if detect_stopline(image):
+                mission = 3
+        if mission == 3:
+            avoid_obstacles(40, 190)
+            if limit == 0:
+                drive(0, 3)
+            if limit == 1:
+                drive(-40, 2)
+            if limit == 2:
+                drive(50, 2)
+            if limit == 3:
+                drive(20, 2)
+            if limit == 4:
+                drive(-7, 2)
+            if not light_detection(image):
+                drive(0, 0)
+                mission = 4
+        if mission == 4:
+            if not light_detection(image) and limit < 5:
+                drive(0, 0)
+            if limit == 5:
+                drive(-40, 3)  # turn left
+                mission = 5
+            if limit == 6:
+                drive(40, 3)  # turn right
+                mission = 5
+        if mission == 5:
+            if not detect_stopline(image):
+                drive(0, 3)
+            else:
+                drive(0, 0)
+                return
+        # if not detect_stopline(image):
+        # if light_detection(image):
+        # if scan_front(44, 134):
+        #    drive(0, 3)
+        # else:
+        #    drive(0, 0)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
@@ -283,4 +416,6 @@ def start():
 
 if __name__ == '__main__':
     start()
+
+
 
