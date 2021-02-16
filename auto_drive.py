@@ -37,8 +37,8 @@ Height = 480
 Offset = 400
 Gap = 40
 flag = 0
-stop_flag = 0
 limit = 0
+c = 0
 
 
 def img_callback(data):
@@ -49,16 +49,6 @@ def img_callback(data):
 def lidar_callback(data):
     global lidar_range
     lidar_range = data.ranges
-
-
-def scan_front(degree_s, degree_e, dist):
-    global lidar_range
-
-    for degree in range(degree_s, degree_e):  # scan degree
-        if lidar_range[degree] <= dist:
-            print(lidar_range[degree])
-            return False
-    return True
 
 
 # publish xycar_motor msg
@@ -238,9 +228,37 @@ def process_image(frame):
     return lpos, rpos
 
 
-def light_detection(frame):
+def light_detection_3(frame):
     global limit
-    frame = frame[150:250, 180:480]
+    frame = frame[160:250, 180:480]
+
+    frame2 = frame.copy()
+    frame2 = cv2.GaussianBlur(frame2, (9, 9), 0)
+    imgray = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
+
+    circles = cv2.HoughCircles(imgray, cv2.HOUGH_GRADIENT, 1, 10, param1=60, param2=25, minRadius=10, maxRadius=40)
+
+    if circles is not None:
+        circles = np.uint16(np.around(circles))
+        for circle in circles[0, :]:
+            cv2.circle(frame, (circle[0], circle[1]), circle[2], (255, 0, 0), 2)
+            cv2.imshow('frame', frame)
+        if len(circles[0]) == 3:
+            lightX = [circles[0][0][0], circles[0][1][0], circles[0][2][0]]
+            lightY = [circles[0][0][1], circles[0][1][1], circles[0][2][1]]
+            lightX.sort()
+            lightY.sort()
+
+            if (lightX[0] + lightX[1] + lightX[2] + 2) // 3 == lightX[1]:
+                print('COLOR VALUE : ', imgray[lightY[2], lightX[2]])
+                if imgray[lightY[2], lightX[2]] > 230:  # light on
+                    return True
+                return False
+    return True
+
+def light_detection_4(frame):
+    global limit
+    frame = frame[200:250, 180:480]
 
     frame2 = frame.copy()
     frame2 = cv2.GaussianBlur(frame2, (9, 9), 0)
@@ -254,63 +272,66 @@ def light_detection(frame):
         for circle in circles[0, :]:
             cv2.circle(frame, (circle[0], circle[1]), circle[2], (255, 0, 0), 2)
             cv2.imshow('frame', frame)
-    if len(circles[0]) == 3:
-        lightX = [circles[0][0][0], circles[0][1][0], circles[0][2][0]]
-        lightY = [circles[0][0][1], circles[0][1][1], circles[0][2][1]]
-        lightX.sort()
-        lightY.sort()
+        if len(circles[0]) == 4:
+            lightX = [circles[0][0][0], circles[0][1][0], circles[0][2][0], circles[0][3][0]]
+            lightY = [circles[0][0][1], circles[0][1][1], circles[0][2][1], circles[0][3][1]]
+            lightX.sort()
+            lightY.sort()
 
-        if (lightX[0] + lightX[1] + lightX[2] + 2) // 3 == lightX[1]:
-            print('COLOR VALUE : ', imgray[lightY[2], lightX[2]])
-            if imgray[lightY[2], lightX[2]] > 230:  # light on
-                return True
-            return False
-    elif len(circles[0]) == 4:
-        lightX = [circles[0][0][0], circles[0][1][0], circles[0][2][0], circles[0][3][0]]
-        lightY = [circles[0][0][1], circles[0][1][1], circles[0][2][1], circles[0][3][1]]
-        lightX.sort()
-        lightY.sort()
-
-        if (lightX[0] + lightX[3]) == (lightX[1] + lightX[2]):
-            if imgray[lightY[0], lightX[0]] >= 230:  # left light
-                limit = 5
-            elif imgray[lightY[3], lightX[3]] >= 230:  # right light
-                limit = 6
-            return False
+            if (lightX[0] + lightX[3]) == (lightX[1] + lightX[2]):
+                if imgray[lightY[0], lightX[0]] >= 230:  # left light
+                    limit = 5
+                elif imgray[lightY[3], lightX[3]] >= 230:  # right light
+                    limit = 6
+                return False
+    return True
 
 
-return True
+def scan_front(degree_s, degree_e, dist):
+    global lidar_range
+
+    while not detect_stoplineB(image):
+        for degree in range(degree_s, degree_e):  # scan degree
+            if lidar_range[degree] <= dist:
+                print(lidar_range[degree])
+                drive(0, 0)
+        drive(c, 3)
 
 
 def avoid_obstacles():
-    global limit, lidar_range, flag  # left = 0', right = 180'
+    global limit, lidar_range, flag, c  # left = 0', right = 180'
 
-    for degree in range(44, 190):
-        # Obstacles in front of vehicle -> turn left
-        if flag == 0 and 44 < degree < 134 and lidar_range[degree] <= 0.75:
-            flag = 1
-            limit = 1
-            print('Turn Left')
-            print(lidar_range[degree], degree)
+    while not detect_stoplineB(image):
+        for degree in range(44, 190):
+            # Obstacles in front of vehicle -> turn left
+            if flag == 0 and 44 < degree < 134 and lidar_range[degree] <= 0.75:
+                flag = 1
+                # limit = 1
+                print('Turn Left')
+                print(lidar_range[degree], degree)
+                drive(c, 3)
 
-        if flag == 1 and 175 < degree < 189 and 0.45 < lidar_range[degree] < 0.8:
-            flag = 2
-            limit = 2
-            print('Turn Right')
-            print(lidar_range[degree], degree)
+            elif flag == 1 and 175 < degree < 189 and 0.45 < lidar_range[degree] < 0.8:
+                flag = 2
+                # limit = 2
+                print('Turn Right')
+                print(lidar_range[degree], degree)
+                drive(-40, 2)
 
-        if flag == 2 and 185 < degree < 189 and 0.1 < lidar_range[degree] < 0.3:
-            flag = 3
-            limit = 3
-            time_s = time.time()
-            print(start)
-            print('Go Straight')
-            print(lidar_range[degree], degree)
+            elif flag == 2 and 185 < degree < 189 and 0.1 < lidar_range[degree] < 0.3:
+                flag = 3
+                # limit = 3
+                time_s = time.time()
+                print(start)
+                print('Go Straight')
+                print(lidar_range[degree], degree)
+                drive(50, 2)
 
-        if flag == 3:
-            time_e = time.time()
-            if time_e - time_s >= 6:
-                limit = 4
+            elif flag == 3:
+                time_e = time.time()
+                if time_e - time_s >= 6:
+                    # limit = 4
+                    drive(-7, 2)
 
 
 def start():
@@ -318,6 +339,7 @@ def start():
     global image
     global Gap
     global Width, Height
+    global c
 
     pid_P = 0.7
     pid_I = 0
@@ -352,7 +374,7 @@ def start():
         # PID Control
         # prev_angle = angle
         # drive(angle, 12)
-        print('Mission', mission)
+        print('Mission', mission, 'limit', limit)
         # drive(c, 3)
 
         if mission == 0:
@@ -376,24 +398,25 @@ def start():
                     mission = 2
                     mission_start = time.time()
         elif mission == 2:
-            if scan_front(0, 134, 0.6):
-                drive(c, 3)
-            else:
-                drive(0, 0)
+            scan_front(0, 134, 0.5)
+            # if scan_front(0, 134, 0.5):
+            #     drive(c, 3)
+            # else:
+            #     drive(0, 0)
             if detect_stoplineB(image):
                 mission = 3
         elif mission == 3:
             avoid_obstacles()
-            if limit == 0:
-                drive(c, 3)
-            elif limit == 1:
-                drive(-40, 2)
-            elif limit == 2:
-                drive(50, 2)
-            elif limit == 3:
-                drive(20, 2)
-            elif limit == 4:
-                drive(-7, 2)
+            # if limit == 0:
+            #     drive(c, 3)
+            # elif limit == 1:
+            #     drive(-40, 2)
+            # elif limit == 2:
+            #     drive(50, 2)
+            # elif limit == 3:
+            #     drive(20, 2)
+            # elif limit == 4:
+            #     drive(-7, 2)
             if not light_detection(image):
                 drive(0, 0)
                 mission = 4
@@ -427,3 +450,4 @@ def start():
 
 if __name__ == '__main__':
     start()
+
