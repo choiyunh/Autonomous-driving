@@ -3,11 +3,13 @@ import cv2
 
 image = cv2.imread('./img/b.png')
 cv2.imshow("original", image)
-image = image[150:350, 250:380]
+image = image[150:250, 180:480]
 
 image2 = image.copy()
 image2 = cv2.GaussianBlur(image2, (9, 9), 0)
 imgray = cv2.cvtColor(image2, cv2.COLOR_BGR2GRAY)
+cv2.imshow("imgray", imgray)
+# print(imgray[,150])
 
 circles = cv2.HoughCircles(imgray, cv2.HOUGH_GRADIENT, 1, 10, param1=60, param2=30, minRadius=0, maxRadius=60)
 cv2.imshow("imgray", imgray)
@@ -20,9 +22,11 @@ if circles is not None:
     if len(circles[0]) == 3:
         lightX = [circles[0][0][0], circles[0][1][0], circles[0][2][0]]
         lightX.sort()
-
+        print(lightX)
+        print(circles[0][2][1], lightX[2])
+        print(imgray[circles[0][2][1], circles[0][2][0]])
         if (lightX[0] + lightX[1] + lightX[2] + 2) // 3 == lightX[1]:
-            if imgray[circles[0][2][1], circle[0][2][0]] <= 160:  # light on
+            if imgray[circles[0][2][1], lightX] <= 160:  # light on
                 print('green light on')
             print('This is traffic light')
     elif len(circles[0]) == 4:
@@ -30,9 +34,9 @@ if circles is not None:
         lightX.sort()
 
         if (lightX[0] + lightX[1] + lightX[2] + 2) // 3 == lightX[1]:
-            if imgray[circles[0][0][1], circle[0][0][0]] <= 160:  # left light
+            if imgray[circles[0][0][1], circle[0][0][0]] >= 230:  # left light
                 limit = 5
-            if imgray[circles[0][3][1], circle[0][3][0]] <= 160:  # right light
+            if imgray[circles[0][3][1], circle[0][3][0]] >= 230:  # right light
                 limit = 6
             print('This is traffic light')
 
