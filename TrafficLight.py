@@ -1,48 +1,67 @@
 import numpy as np
 import cv2
 
-image = cv2.imread('./img/b.png')
-cv2.imshow("original", image)
-image = image[150:250, 180:480]
+def light_detection_3(frame):
+    global limit
+    frame = frame[160:230, 180:480]
+    cv2.imshow('frame', frame)
+    frame2 = frame.copy()
+    frame2 = cv2.GaussianBlur(frame2, (9, 9), 0)
+    imgray = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
 
-image2 = image.copy()
-image2 = cv2.GaussianBlur(image2, (9, 9), 0)
-imgray = cv2.cvtColor(image2, cv2.COLOR_BGR2GRAY)
-cv2.imshow("imgray", imgray)
-# print(imgray[,150])
+    circles = cv2.HoughCircles(imgray, cv2.HOUGH_GRADIENT, 1, 10, param1=60, param2=25, minRadius=11, maxRadius=50)
 
-circles = cv2.HoughCircles(imgray, cv2.HOUGH_GRADIENT, 1, 10, param1=60, param2=30, minRadius=0, maxRadius=60)
-cv2.imshow("imgray", imgray)
-if circles is not None:
-    circles = np.uint16(np.around(circles))
-    print(circles)
-    for circle in circles[0, :]:
-        cv2.circle(image, (circle[0], circle[1]), circle[2], (255, 0, 0), 2)
+    if circles is not None:
+        circles = np.uint16(np.around(circles))
+        for circle in circles[0, :]:
+            cv2.circle(frame, (circle[0], circle[1]), circle[2], (255, 0, 0), 2)
+            cv2.imshow('frame', frame)
+        if len(circles[0]) == 3:
+            lightX = [circles[0][0][0], circles[0][1][0], circles[0][2][0]]
+            lightY = [circles[0][0][1], circles[0][1][1], circles[0][2][1]]
+            lightX.sort()
+            lightY.sort()
 
-    if len(circles[0]) == 3:
-        lightX = [circles[0][0][0], circles[0][1][0], circles[0][2][0]]
-        lightX.sort()
-        print(lightX)
-        print(circles[0][2][1], lightX[2])
-        print(imgray[circles[0][2][1], circles[0][2][0]])
-        if (lightX[0] + lightX[1] + lightX[2] + 2) // 3 == lightX[1]:
-            if imgray[circles[0][2][1], lightX] <= 160:  # light on
-                print('green light on')
-            print('This is traffic light')
-    elif len(circles[0]) == 4:
-        lightX = [circles[0][0][0], circles[0][1][0], circles[0][2][0]]
-        lightX.sort()
+            if (lightX[0] + lightX[1] + lightX[2] + 2) // 3 == lightX[1]:
+                print('COLOR VALUE : ', imgray[lightY[2], lightX[2]])
+                if imgray[lightY[2], lightX[2]] > 230:  # light on
+                    return True
+                return False
+    return True
 
-        if (lightX[0] + lightX[1] + lightX[2] + 2) // 3 == lightX[1]:
-            if imgray[circles[0][0][1], circle[0][0][0]] >= 230:  # left light
-                limit = 5
-            if imgray[circles[0][3][1], circle[0][3][0]] >= 230:  # right light
-                limit = 6
-            print('This is traffic light')
+def light_detection_4(frame):
+    global limit
+    frame = frame[180:250, 200:460]
 
-else:
-    print('원을 찾을 수 없음')
+    frame2 = frame.copy()
+    frame2 = cv2.GaussianBlur(frame2, (9, 9), 0)
+    imgray = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
 
+    circles = cv2.HoughCircles(imgray, cv2.HOUGH_GRADIENT, 1, 10, param1=60, param2=25, minRadius=10, maxRadius=40)
 
+    if circles is not None:
+        circles = np.uint16(np.around(circles))
+
+        for circle in circles[0, :]:
+            cv2.circle(frame, (circle[0], circle[1]), circle[2], (255, 0, 0), 2)
+            cv2.imshow('frame', frame)
+        if len(circles[0]) == 4:
+            lightX = [circles[0][0][0], circles[0][1][0], circles[0][2][0], circles[0][3][0]]
+            lightY = [circles[0][0][1], circles[0][1][1], circles[0][2][1], circles[0][3][1]]
+            lightX.sort()
+            lightY.sort()
+
+            if (lightX[0] + lightX[3]) == (lightX[1] + lightX[2]):
+                if imgray[lightY[0], lightX[0]] >= 230:  # left light
+                    limit = 5
+                elif imgray[lightY[3], lightX[3]] >= 230:  # right light
+                    limit = 6
+                return False
+    return True
+
+frame = cv2.imread('./img/b.png')
+cv2.imshow('original', frame)
+if light_detection_3(frame):
+    print('circle')
 cv2.waitKey(0)
 cv2.destroyAllWindows()
